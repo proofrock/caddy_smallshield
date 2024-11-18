@@ -1,4 +1,4 @@
-module github.com/proofrock/caddy_small_shield
+module github.com/proofrock/caddy-smallshield
 
 go 1.23.3
 
