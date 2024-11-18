@@ -25,7 +25,7 @@ The parser of the blacklist looks in each line for a pattern that resembles an I
 ## Building
 
 ```bash
-xcaddy build --with github.com/proofrock/caddy-smallshield
+xcaddy build --with github.com/proofrock/caddy_smallshield
 ```
 
 ## Configuration
