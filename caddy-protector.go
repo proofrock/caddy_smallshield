@@ -102,8 +102,6 @@ func (m CaddySmallShield) ServeHTTP(w http.ResponseWriter, r *http.Request, next
 		ok = m.IsWhitelisted(ip) || !m.IsBlacklisted(ip)
 		m.cache.Store(ip, ok)
 	}
-	println(ip)
-	println(ok.(bool))
 	if ok.(bool) {
 		return next.ServeHTTP(w, r)
 	}
