@@ -18,9 +18,11 @@ Also, it allows to specify a comma-separated list of IPs to consider as reputabl
 
 It works with IPV4.
 
-It tries to do it as fast as possible, avoiding going through the list if the "fate" of the request IP has already been calculated before.
+It tries to do it as fast as possible, using a high-performance and space-efficient bit tree to calculate
+the IP "fate".
 
-The parser of the blacklist looks in each line for a pattern that resembles an IP or an IP range, and loads it. Lines not containing any are ignored.
+The parser of the blacklist looks in each line for a pattern that resembles an IP or an IP range, and loads
+it. Lines not containing any are ignored, as lines beginning with '#' or ';' are.
 
 ## Building
 
@@ -36,7 +38,6 @@ xcaddy build --with github.com/proofrock/caddy_smallshield
 }
 
 :8089 {
-	bind 127.0.0.1
 	caddy_smallshield {
 		whitelist "127.0.0.1"
 		blacklist_file "/firehol_level1.netset"

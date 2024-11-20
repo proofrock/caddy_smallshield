@@ -2,7 +2,6 @@ package caddy_smallshield
 
 import (
 	"errors"
-	"net"
 	"net/http"
 	"slices"
 	"strings"
@@ -12,8 +11,11 @@ import (
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
+	"github.com/proofrock/caddy_smallshield/iptree"
 	"go.uber.org/zap"
 )
+
+const VERSION = "v0.1.0"
 
 func init() {
 	caddy.RegisterModule(CaddySmallShield{})
@@ -24,12 +26,11 @@ type CaddySmallShield struct {
 	BlacklistFile string `json:"blacklist_file,omitempty"`
 	Whitelist     string `json:"whitelist,omitempty"`
 
-	blacklistCidrs []*net.IPNet
+	blacklistCidrs *iptree.IPTree
 	whitelist      []string
 
 	logger *zap.Logger
 
-	cache             *sync.Map
 	mutexForBlacklist *sync.RWMutex
 	mutexForWhitelist *sync.RWMutex
 }
@@ -44,17 +45,14 @@ func (CaddySmallShield) CaddyModule() caddy.ModuleInfo {
 func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 	m.logger = ctx.Logger()
 
-	m.cache = &sync.Map{}
 	m.mutexForBlacklist = &sync.RWMutex{}
 	m.mutexForWhitelist = &sync.RWMutex{}
-
-	m.cache.Clear()
 
 	m.mutexForBlacklist.Lock()
 	defer m.mutexForBlacklist.Unlock()
 
 	if m.BlacklistFile != "" {
-		cidrs, err := NewIPBlacklist(m.BlacklistFile)
+		cidrs, err := iptree.NewFromFile(m.BlacklistFile, false)
 		if err != nil {
 			return err
 		}
@@ -68,25 +66,19 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 		m.whitelist = strings.Split(m.Whitelist, ",")
 	}
 
-	m.logger.Sugar().Infof("caddy_smallshield: init'd with %d items in blacklist and %d in whitelist", len(m.blacklistCidrs), len(m.whitelist))
+	m.logger.Sugar().Infof("SmallShield %s: init'd with %d items in blacklist and %d in whitelist", VERSION, m.blacklistCidrs.IPRangesIngested(), len(m.whitelist))
 
 	// return fmt.Errorf("myerror")
 	return nil
 }
 
 func (m *CaddySmallShield) IsBlacklisted(ip string) bool {
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
-		return false // Invalid IP
+	if ip == "" {
+		return false // Invalid IP TODO check for integrity
 	}
 	m.mutexForBlacklist.RLock()
 	defer m.mutexForBlacklist.RUnlock()
-	for _, cidr := range m.blacklistCidrs {
-		if cidr.Contains(parsedIP) {
-			return true
-		}
-	}
-	return false
+	return m.blacklistCidrs.CheckIP(ip)
 }
 
 func (m *CaddySmallShield) IsWhitelisted(ip string) bool {
@@ -95,14 +87,18 @@ func (m *CaddySmallShield) IsWhitelisted(ip string) bool {
 	return slices.Contains[[]string](m.whitelist, ip)
 }
 
-func (m CaddySmallShield) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	var ip = CutToColon(r.RemoteAddr)
-	ok, cached := m.cache.Load(ip)
-	if !cached {
-		ok = m.IsWhitelisted(ip) || !m.IsBlacklisted(ip)
-		m.cache.Store(ip, ok)
+func cutToColon(input string) string {
+	index := strings.Index(input, ":")
+
+	if index != -1 {
+		return input[:index]
 	}
-	if ok.(bool) {
+	return input
+}
+
+func (m CaddySmallShield) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+	var ip = cutToColon(r.RemoteAddr)
+	if m.IsWhitelisted(ip) || !m.IsBlacklisted(ip) {
 		return next.ServeHTTP(w, r)
 	}
 	return caddyhttp.Error(403, errors.New("IP Blocked"))
