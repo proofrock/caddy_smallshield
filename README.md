@@ -29,7 +29,7 @@ it. Lines not containing any are ignored, as lines beginning with `#` or `;` are
 ## Building
 
 ```bash
-xcaddy build --with github.com/proofrock/caddy_smallshield
+xcaddy build --with github.com/proofrock/caddy_smallshield@v0.2.1
 ```
 
 ## Configuration

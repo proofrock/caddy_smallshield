@@ -48,19 +48,25 @@ func bit(num int, pos int) int {
 	return 1
 }
 
-func (ipt *IPTree) ingest(rangip string) {
+func (ipt *IPTree) ingest(rangip string) error {
 	splitBySlash := strings.Split(rangip, "/")
 	splitByDot := strings.Split(splitBySlash[0], ".")
-	rangePart, _ := strconv.Atoi(splitBySlash[1])
+	rangePart, err := strconv.Atoi(splitBySlash[1])
+	if err != nil {
+		return err
+	}
 	var ipParts [4]int
-	for i := range 4 {
-		ipParts[i], _ = strconv.Atoi(splitByDot[i])
+	for i := 0; i < 4; i++ {
+		ipParts[i], err = strconv.Atoi(splitByDot[i])
+		if err != nil {
+			return err
+		}
 	}
 	pos := 1
 	current := &ipt.root
 all:
-	for ipPart := range 4 {
-		for bitPos := range 8 {
+	for ipPart := 0; ipPart < 4; ipPart++ {
+		for bitPos := 0; bitPos < 8; bitPos++ {
 			if current.isRange {
 				break all
 			}
@@ -78,17 +84,18 @@ all:
 		}
 	}
 	ipt.iptotal++
+	return nil
 }
 
-func (ipt *IPTree) AddIPRange(rangip string) {
+func (ipt *IPTree) AddIPRange(rangip string) error {
 	if ipt.threadSafe {
 		ipt.mutex.Lock()
 		defer ipt.mutex.Unlock()
 	}
-	ipt.ingest(rangip)
+	return ipt.ingest(rangip)
 }
 
-func (ipt IPTree) CheckIP(ip string) bool {
+func (ipt IPTree) CheckIP(ip string) (bool, error) {
 	if ipt.threadSafe {
 		ipt.mutex.RLock()
 		defer ipt.mutex.RUnlock()
@@ -96,23 +103,27 @@ func (ipt IPTree) CheckIP(ip string) bool {
 
 	splitByDot := strings.Split(ip, ".")
 	var ipParts [4]int
-	for i := range 4 {
-		ipParts[i], _ = strconv.Atoi(splitByDot[i])
+	for i := 0; i < 4; i++ {
+		ipPart, err := strconv.Atoi(splitByDot[i])
+		if err != nil {
+			return false, err
+		}
+		ipParts[i] = ipPart
 	}
-	current := ipt.root
-	for ipPart := range 4 {
-		for bitPos := range 8 {
+	current := &ipt.root
+	for ipPart := 0; ipPart < 4; ipPart++ {
+		for bitPos := 0; bitPos < 8; bitPos++ {
 			if current.isRange {
-				return true
+				return true, nil
 			}
 			myBit := bit(ipParts[ipPart], bitPos)
 			if current.children[myBit] == nil {
-				return false
+				return false, nil
 			}
-			current = *current.children[myBit]
+			current = current.children[myBit]
 		}
 	}
-	return true
+	return true, nil
 }
 
 // O(log(n))
@@ -150,7 +161,6 @@ var cidrRegex *regexp.Regexp = regexp.MustCompile(`\b(\d{1,3}(\.\d{1,3}){3}/\d{1
 var ipRegex *regexp.Regexp = regexp.MustCompile(`\b(\d{1,3}(\.\d{1,3}){3})\b`)
 
 func line2IPRange(line string) string {
-
 	// Check for CIDR range first
 	if cidrMatch := cidrRegex.FindString(line); cidrMatch != "" {
 		return cidrMatch
@@ -181,7 +191,10 @@ func NewFromURL(url string, threadSafe bool) (*IPTree, error) {
 		}
 		cidr = line2IPRange(cidr)
 		if cidr != "" {
-			ipt.ingest(cidr)
+			err := ipt.ingest(cidr)
+			if err != nil {
+				// TODO silent? I cannot let it stop everything
+			}
 		}
 	}
 

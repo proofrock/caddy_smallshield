@@ -19,7 +19,7 @@ func mytest(t *testing.T, threadSafe bool) {
 	println("Avg nodes/IP range: ", ipt.NodesNumber()/ipt.IPRangesIngested())
 
 	assert := func(ip string, term bool) {
-		if ipt.CheckIP(ip) != term {
+		if val, _ := ipt.CheckIP(ip); val != term {
 			t.Fatalf("%s is not %t", ip, term)
 		}
 	}
@@ -94,8 +94,8 @@ func mytest(t *testing.T, threadSafe bool) {
 
 	start = time.Now()
 	for range 10000000 {
-		_ = ipt.CheckIP("2.57.168.2")
-		_ = ipt.CheckIP("2.58.168.2")
+		_, _ = ipt.CheckIP("2.57.168.2")
+		_, _ = ipt.CheckIP("2.58.168.2")
 	}
 	println(fmt.Sprintf("Over 10M iterations of 2 checks, a single check took %f ns", float64(time.Since(start).Microseconds())/20000))
 }

@@ -2,6 +2,7 @@ package caddy_smallshield
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -15,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const VERSION = "v0.2.0"
+const VERSION = "v0.2.1"
 
 func init() {
 	caddy.RegisterModule(CaddySmallShield{})
@@ -78,7 +79,12 @@ func (m *CaddySmallShield) IsBlacklisted(ip string) bool {
 	}
 	m.mutexForBlacklist.RLock()
 	defer m.mutexForBlacklist.RUnlock()
-	return m.blacklistCidrs.CheckIP(ip)
+	ret, err := m.blacklistCidrs.CheckIP(ip)
+	if err != nil {
+		m.logger.Error(fmt.Sprintf("error in checking IP %s", ip))
+		return true
+	}
+	return ret
 }
 
 func (m *CaddySmallShield) IsWhitelisted(ip string) bool {
