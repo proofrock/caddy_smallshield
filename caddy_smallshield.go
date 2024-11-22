@@ -23,8 +23,8 @@ func init() {
 }
 
 type CaddySmallShield struct {
-	BlacklistFile string `json:"blacklist_file,omitempty"`
-	Whitelist     string `json:"whitelist,omitempty"`
+	BlacklistURL string `json:"blacklist_url,omitempty"`
+	Whitelist    string `json:"whitelist,omitempty"`
 
 	blacklistCidrs *iptree.IPTree
 	whitelist      []string
@@ -51,8 +51,8 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 	m.mutexForBlacklist.Lock()
 	defer m.mutexForBlacklist.Unlock()
 
-	if m.BlacklistFile != "" {
-		cidrs, err := iptree.NewFromFile(m.BlacklistFile, false)
+	if m.BlacklistURL != "" {
+		cidrs, err := iptree.NewFromURL(m.BlacklistURL, false)
 		if err != nil {
 			return err
 		}
@@ -112,8 +112,8 @@ func (m *CaddySmallShield) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 				if !d.Args(&m.Whitelist) {
 					return d.Err("invalid whitelist configuration")
 				}
-			case "blacklist_file":
-				if !d.Args(&m.BlacklistFile) {
+			case "blacklist_url":
+				if !d.Args(&m.BlacklistURL) {
 					return d.Err("invalid blacklist_url configuration")
 				}
 			default:

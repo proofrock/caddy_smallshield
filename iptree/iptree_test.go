@@ -8,11 +8,9 @@ import (
 	"github.com/proofrock/caddy_smallshield/iptree"
 )
 
-// Download a file 'firehol_level1.netset' in the root dir of the project
-
 func mytest(t *testing.T, threadSafe bool) {
 	start := time.Now()
-	ipt, err := iptree.NewFromFile("../firehol_level1.netset", threadSafe)
+	ipt, err := iptree.NewFromURL("https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset", threadSafe)
 	if err != nil {
 		panic(err)
 	}

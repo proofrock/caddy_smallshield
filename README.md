@@ -2,7 +2,7 @@
 
 > 5 gp, 3 lbs, AC +1
 
-This Caddy module is really simple (for now), it loads a local file containing a blacklist of IPs or IP ranges
+This Caddy module is really simple (for now), it loads a URL containing a blacklist of IPs or IP ranges
 
 ```
 ...
@@ -12,7 +12,9 @@ This Caddy module is really simple (for now), it loads a local file containing a
 ...
 ```
 
-and filter away requests coming from those IPs. 
+and filter away requests coming from those IPs.
+
+> In the examples we use [firehol_level1 on github](https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset), please do not abuse their bandwidth.
 
 Also, it allows to specify a comma-separated list of IPs to consider as reputable, despite the blacklist.
 
@@ -22,7 +24,7 @@ It tries to do it as fast as possible, using a high-performance and space-effici
 the IP "fate".
 
 The parser of the blacklist looks in each line for a pattern that resembles an IP or an IP range, and loads
-it. Lines not containing any are ignored, as lines beginning with '#' or ';' are.
+it. Lines not containing any are ignored, as lines beginning with `#` or `;` are.
 
 ## Building
 
@@ -40,7 +42,8 @@ xcaddy build --with github.com/proofrock/caddy_smallshield
 :8089 {
 	caddy_smallshield {
 		whitelist "127.0.0.1"
-		blacklist_file "/firehol_level1.netset"
+		# Please do not abuse, e.g. reloading the config too many times
+		blacklist_url "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset"
 	}
 	respond "Hello, World!"
 }

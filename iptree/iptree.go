@@ -1,8 +1,6 @@
 package iptree
 
 import (
-	"bufio"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -166,31 +164,25 @@ func line2IPRange(line string) string {
 	return ""
 }
 
-func NewFromFile(filename string, threadSafe bool) (*IPTree, error) {
-	file, err := os.Open(filename)
+func NewFromURL(url string, threadSafe bool) (*IPTree, error) {
+	lines, err := fetchBodyLinesWithRetries(url)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
 
 	ipt := NewIPTree(threadSafe)
 	if ipt.threadSafe {
 		ipt.mutex.Lock()
 		defer ipt.mutex.Unlock()
 	}
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		cidr := scanner.Text()
+	for _, cidr := range lines {
 		if strings.HasPrefix(cidr, ";") || strings.HasPrefix(cidr, "#") {
 			continue
 		}
-		cidr = line2IPRange(scanner.Text())
+		cidr = line2IPRange(cidr)
 		if cidr != "" {
 			ipt.ingest(cidr)
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
 	}
 
 	return ipt, nil
