@@ -174,6 +174,10 @@ func line2IPRange(line string) string {
 	return ""
 }
 
+func Empty() *IPTree {
+	return NewIPTree(false)
+}
+
 func NewFromURL(url string, threadSafe bool) (*IPTree, error) {
 	lines, err := fetchBodyLinesWithRetries(url)
 	if err != nil {

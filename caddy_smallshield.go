@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -16,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const VERSION = "v0.2.1"
+const VERSION = "v0.3.0"
 
 func init() {
 	caddy.RegisterModule(CaddySmallShield{})
@@ -26,9 +28,13 @@ func init() {
 type CaddySmallShield struct {
 	BlacklistURL string `json:"blacklist_url,omitempty"`
 	Whitelist    string `json:"whitelist,omitempty"`
+	ClosingHours string `json:"closing_hours,omitempty"`
+	LogBlockings string `json:"log_blockings,omitempty"`
 
 	blacklistCidrs *iptree.IPTree
 	whitelist      []string
+	closingHours   map[string]any
+	logBlockings   bool
 
 	logger *zap.Logger
 
@@ -48,6 +54,7 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 
 	m.mutexForBlacklist = &sync.RWMutex{}
 	m.mutexForWhitelist = &sync.RWMutex{}
+	m.closingHours = make(map[string]any)
 
 	m.mutexForBlacklist.Lock()
 	defer m.mutexForBlacklist.Unlock()
@@ -58,6 +65,8 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 			return err
 		}
 		m.blacklistCidrs = cidrs
+	} else {
+		m.blacklistCidrs = iptree.Empty()
 	}
 
 	m.mutexForWhitelist.Lock()
@@ -67,7 +76,25 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 		m.whitelist = strings.Split(m.Whitelist, ",")
 	}
 
-	m.logger.Sugar().Infof("SmallShield %s: init'd with %d items in blacklist and %d in whitelist", VERSION, m.blacklistCidrs.IPRangesIngested(), len(m.whitelist))
+	if m.ClosingHours != "" {
+		for _, ch := range strings.Split(m.ClosingHours, ",") {
+			hour, err := strconv.Atoi(strings.TrimSpace(ch))
+			if err != nil {
+				return fmt.Errorf("'%s' is not a valid closing hour", ch)
+			}
+			m.closingHours[strconv.Itoa(hour)] = true
+		}
+	}
+
+	if m.LogBlockings != "" {
+		lb, err := strconv.ParseBool(m.LogBlockings)
+		if err != nil {
+			return fmt.Errorf("'%s' is not a valid config for log_blockings", m.LogBlockings)
+		}
+		m.logBlockings = lb
+	}
+
+	m.logger.Sugar().Infof("SmallShield %s: init'd with %d items in blacklist and %d in whitelist, %d closing hours", VERSION, m.blacklistCidrs.IPRangesIngested(), len(m.whitelist), len(m.closingHours))
 
 	// return fmt.Errorf("myerror")
 	return nil
@@ -90,7 +117,7 @@ func (m *CaddySmallShield) IsBlacklisted(ip string) bool {
 func (m *CaddySmallShield) IsWhitelisted(ip string) bool {
 	m.mutexForWhitelist.RLock()
 	defer m.mutexForWhitelist.RUnlock()
-	return slices.Contains[[]string](m.whitelist, ip)
+	return slices.Contains(m.whitelist, ip)
 }
 
 func cutToColon(input string) string {
@@ -103,11 +130,28 @@ func cutToColon(input string) string {
 }
 
 func (m CaddySmallShield) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	var ip = cutToColon(r.RemoteAddr)
-	if m.IsWhitelisted(ip) || !m.IsBlacklisted(ip) {
-		return next.ServeHTTP(w, r)
+	blockedReason := ""
+	defer func() {
+
+	}()
+
+	var hour = fmt.Sprintf("%d", time.Now().Hour())
+	if _, closed := m.closingHours[hour]; closed {
+		blockedReason = "shop is closed"
+		return caddyhttp.Error(403, errors.New(blockedReason))
+	} else {
+		var ip = cutToColon(r.RemoteAddr)
+		if m.IsBlacklisted(ip) && !m.IsWhitelisted(ip) {
+			blockedReason = fmt.Sprintf("IP %s is blocked", ip)
+		}
 	}
-	return caddyhttp.Error(403, errors.New("IP Blocked"))
+	if blockedReason != "" {
+		if m.logBlockings {
+			m.logger.Sugar().Infof("blocked: %s", blockedReason)
+		}
+		return caddyhttp.Error(403, errors.New(blockedReason))
+	}
+	return next.ServeHTTP(w, r)
 }
 
 func (m *CaddySmallShield) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
@@ -121,6 +165,14 @@ func (m *CaddySmallShield) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 			case "blacklist_url":
 				if !d.Args(&m.BlacklistURL) {
 					return d.Err("invalid blacklist_url configuration")
+				}
+			case "closing_hours":
+				if !d.Args(&m.ClosingHours) {
+					return d.Err("invalid closing_hours configuration")
+				}
+			case "log_blockings":
+				if !d.Args(&m.LogBlockings) {
+					return d.Err("invalid log_blockings configuration")
 				}
 			default:
 				return d.Errf("unknown directive: %s", d.Val())
