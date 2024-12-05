@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const VERSION = "v0.3.0"
+const VERSION = "v0.3.1"
 
 func init() {
 	caddy.RegisterModule(CaddySmallShield{})
