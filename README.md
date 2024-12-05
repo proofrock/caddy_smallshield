@@ -44,7 +44,7 @@ When `log_blockings` is present and set to `true` or `1`, it will log blocked at
 ## Building
 
 ```bash
-xcaddy build --with github.com/proofrock/caddy_smallshield@v0.3.1
+xcaddy build --with github.com/proofrock/caddy_smallshield@v0.3.2
 ```
 
 ## Configuration
