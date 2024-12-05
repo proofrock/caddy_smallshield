@@ -31,10 +31,11 @@ type CaddySmallShield struct {
 	ClosingHours string `json:"closing_hours,omitempty"`
 	LogBlockings string `json:"log_blockings,omitempty"`
 
-	blacklistCidrs *iptree.IPTree
-	whitelist      []string
-	closingHours   map[string]any
-	logBlockings   bool
+	blacklistCidrs        *iptree.IPTree
+	whitelist             []string
+	closingHours          [24]bool
+	closingHoursPrintable string
+	logBlockings          bool
 
 	logger *zap.Logger
 
@@ -54,7 +55,6 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 
 	m.mutexForBlacklist = &sync.RWMutex{}
 	m.mutexForWhitelist = &sync.RWMutex{}
-	m.closingHours = make(map[string]any)
 
 	m.mutexForBlacklist.Lock()
 	defer m.mutexForBlacklist.Unlock()
@@ -79,11 +79,12 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 	if m.ClosingHours != "" {
 		for _, ch := range strings.Split(m.ClosingHours, ",") {
 			hour, err := strconv.Atoi(strings.TrimSpace(ch))
-			if err != nil {
+			if err != nil || hour < 0 || hour > 23 {
 				return fmt.Errorf("'%s' is not a valid closing hour", ch)
 			}
-			m.closingHours[strconv.Itoa(hour)] = true
+			m.closingHours[hour] = true
 		}
+		m.closingHoursPrintable = getPrintableSlice(m.closingHours)
 	}
 
 	if m.LogBlockings != "" {
@@ -94,7 +95,7 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 		m.logBlockings = lb
 	}
 
-	m.logger.Sugar().Infof("SmallShield %s: init'd with %d items in blacklist and %d in whitelist, %d closing hours", VERSION, m.blacklistCidrs.IPRangesIngested(), len(m.whitelist), len(m.closingHours))
+	m.logger.Sugar().Infof("SmallShield %s: init'd with %d items in blacklist and %d in whitelist, %d closing hours. Logging? %t", VERSION, m.blacklistCidrs.IPRangesIngested(), len(m.whitelist), len(m.closingHours), m.logBlockings)
 
 	// return fmt.Errorf("myerror")
 	return nil
@@ -120,25 +121,12 @@ func (m *CaddySmallShield) IsWhitelisted(ip string) bool {
 	return slices.Contains(m.whitelist, ip)
 }
 
-func cutToColon(input string) string {
-	index := strings.Index(input, ":")
-
-	if index != -1 {
-		return input[:index]
-	}
-	return input
-}
-
 func (m CaddySmallShield) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	blockedReason := ""
-	defer func() {
 
-	}()
-
-	var hour = fmt.Sprintf("%d", time.Now().Hour())
-	if _, closed := m.closingHours[hour]; closed {
-		blockedReason = "shop is closed"
-		return caddyhttp.Error(403, errors.New(blockedReason))
+	var hour = time.Now().Hour()
+	if m.closingHours[hour] {
+		blockedReason = fmt.Sprintf("shop is closed, hour is %d and closing_hours is set to %s", hour, m.closingHoursPrintable)
 	} else {
 		var ip = cutToColon(r.RemoteAddr)
 		if m.IsBlacklisted(ip) && !m.IsWhitelisted(ip) {
