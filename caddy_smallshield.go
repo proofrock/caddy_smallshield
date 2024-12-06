@@ -35,6 +35,7 @@ type CaddySmallShield struct {
 	whitelist             []string
 	closingHours          [24]bool
 	closingHoursPrintable string
+	closingHoursCount     int
 	logBlockings          bool
 
 	logger *zap.Logger
@@ -83,6 +84,7 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 				return fmt.Errorf("'%s' is not a valid closing hour", ch)
 			}
 			m.closingHours[hour] = true
+			m.closingHoursCount++
 		}
 		m.closingHoursPrintable = getPrintableSlice(m.closingHours)
 	}
@@ -95,7 +97,11 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 		m.logBlockings = lb
 	}
 
-	m.logger.Sugar().Infof("SmallShield %s: init'd with %d items in blacklist and %d in whitelist, %d closing hours. Logging? %t", VERSION, m.blacklistCidrs.IPRangesIngested(), len(m.whitelist), len(m.closingHours), m.logBlockings)
+	loggingString := ""
+	if m.logBlockings {
+		loggingString = " Logging active."
+	}
+	m.logger.Sugar().Infof("SmallShield %s: init'd with %d items in blacklist and %d in whitelist, %d closing hours.%s", VERSION, m.blacklistCidrs.IPRangesIngested(), len(m.whitelist), m.closingHoursCount, loggingString)
 
 	// return fmt.Errorf("myerror")
 	return nil
