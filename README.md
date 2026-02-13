@@ -27,7 +27,7 @@ Also, it allows to specify a comma-separated list of IPs to consider as reputabl
 
 It works with IPV4.
 
-It tries to do it as fast as possible, using a high-performance and space-efficient bit tree to calculate
+It tries to do it as fast as possible, using a high-performance and space-efficient data structure to calculate
 the IP "fate".
 
 The parser of the blacklist looks in each line for a pattern that resembles an IP or an IP range, and loads

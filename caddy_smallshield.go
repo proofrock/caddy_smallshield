@@ -14,11 +14,11 @@ import (
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"github.com/proofrock/caddy_smallshield/iptree"
+	"github.com/proofrock/caddy_smallshield/ipsearch"
 	"go.uber.org/zap"
 )
 
-const VERSION = "v0.3.3"
+const VERSION = "v0.4.0"
 
 func init() {
 	caddy.RegisterModule(CaddySmallShield{})
@@ -31,7 +31,7 @@ type CaddySmallShield struct {
 	ClosingHours string `json:"closing_hours,omitempty"`
 	LogBlockings string `json:"log_blockings,omitempty"`
 
-	blacklistCidrs        *iptree.IPTree
+	blacklistCidrs        *ipsearch.IPSearch
 	whitelist             []string
 	closingHours          [24]bool
 	closingHoursPrintable string
@@ -61,13 +61,13 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 	defer m.mutexForBlacklist.Unlock()
 
 	if m.BlacklistURL != "" {
-		cidrs, err := iptree.NewFromURL(m.BlacklistURL, false)
+		cidrs, err := ipsearch.NewFromURL(m.BlacklistURL, false)
 		if err != nil {
 			return err
 		}
 		m.blacklistCidrs = cidrs
 	} else {
-		m.blacklistCidrs = iptree.Empty()
+		m.blacklistCidrs = ipsearch.Empty()
 	}
 
 	m.mutexForWhitelist.Lock()
@@ -135,6 +135,7 @@ func (m CaddySmallShield) ServeHTTP(w http.ResponseWriter, r *http.Request, next
 		blockedReason = fmt.Sprintf("shop is closed, hour is %d and closing_hours is set to %s", hour, m.closingHoursPrintable)
 	} else {
 		var ip = cutToColon(r.RemoteAddr)
+		m.logger.Sugar().Infof("IP: %s", r.RemoteAddr)
 		if m.IsBlacklisted(ip) && !m.IsWhitelisted(ip) {
 			blockedReason = fmt.Sprintf("IP %s is blocked", ip)
 		}
