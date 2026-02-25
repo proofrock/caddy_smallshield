@@ -2,11 +2,11 @@
 
 > 5 gp, 3 lbs, AC +1
 
-This Caddy module filters away IPs based on a blacklist loaded from a URL and a whitelist.
+This Caddy module filters away IPs based on a blacklist loaded from a file and a whitelist.
 
 ### IP Filtering
 
-It is really simple (for now), it loads a URL containing a blacklist of IPs or IP ranges
+It is really simple, it loads a file containing a blacklist of IPs or IP ranges
 
 ```
 ...
@@ -52,7 +52,7 @@ xcaddy build --with github.com/proofrock/caddy_smallshield@v0.3.3
  caddy_smallshield {
   whitelist "127.0.0.1"
   # Please do not abuse, e.g. reloading the config too many times
-  blacklist_url "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset"
+  blacklist "https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset"
   log_blockings "1"
  }
  respond "Hello, World!"

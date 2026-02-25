@@ -1,15 +1,12 @@
 package ipsearch
 
 import (
-	"errors"
-	"io"
-	"net/http"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 // Using sorted intervals + binary search.
@@ -179,18 +176,18 @@ func Empty() *IPSearch {
 	return NewIPTree(false)
 }
 
-func NewFromURL(url string, threadSafe bool) (*IPSearch, error) {
-	lines, err := fetchBodyLinesWithRetries(url)
+func NewFromFile(path string, threadSafe bool) (*IPSearch, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
 	ipt := NewIPTree(threadSafe)
-	for _, cidr := range lines {
-		if strings.HasPrefix(cidr, ";") || strings.HasPrefix(cidr, "#") {
+	for _, line := range strings.Split(string(data), "\n") {
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		cidr = line2IPRange(cidr)
+		cidr := line2IPRange(line)
 		if cidr != "" {
 			ipt.ingest(cidr)
 		}
@@ -198,41 +195,4 @@ func NewFromURL(url string, threadSafe bool) (*IPSearch, error) {
 	ipt.build()
 
 	return ipt, nil
-}
-
-// for ipflat.go
-
-const retriesNumber int = 3
-const retryPause time.Duration = 2 * time.Second
-
-func fetchBodyLines(url string) ([]string, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("failed to fetch URL, status code: " + resp.Status)
-	}
-	bbody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	return strings.Split(string(bbody), "\n"), nil
-}
-
-func fetchBodyLinesWithRetries(url string) ([]string, error) {
-	for i := 0; i < retriesNumber; i++ {
-		ret, err := fetchBodyLines(url)
-		if err == nil {
-			return ret, nil
-		}
-
-		if i == retriesNumber-1 { // last retry
-			return nil, err
-		}
-
-		time.Sleep(retryPause)
-	}
-	return nil, errors.New("this is impossible")
 }
