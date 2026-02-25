@@ -1,6 +1,7 @@
 package ipsearch
 
 import (
+	"errors"
 	"os"
 	"regexp"
 	"sort"
@@ -37,7 +38,13 @@ func NewIPTree(threadSafe bool) *IPSearch {
 
 func parseCIDR(rangip string) (uint32, uint32, error) {
 	parts := strings.Split(rangip, "/")
+	if len(parts) != 2 {
+		return 0, 0, errors.New("invalid CIDR notation: " + rangip)
+	}
 	dotParts := strings.Split(parts[0], ".")
+	if len(dotParts) != 4 {
+		return 0, 0, errors.New("invalid IPv4 address: " + parts[0])
+	}
 	prefix, err := strconv.Atoi(parts[1])
 	if err != nil {
 		return 0, 0, err
@@ -58,6 +65,9 @@ func parseCIDR(rangip string) (uint32, uint32, error) {
 
 func parseIP(ip string) (uint32, error) {
 	parts := strings.Split(ip, ".")
+	if len(parts) != 4 {
+		return 0, errors.New("invalid IPv4 address: " + ip)
+	}
 	var result uint32
 	for i := 0; i < 4; i++ {
 		v, err := strconv.Atoi(parts[i])
@@ -159,8 +169,8 @@ func (ipt *IPSearch) IPRangesIngested() int {
 	return ipt.iptotal
 }
 
-var cidrRegex *regexp.Regexp = regexp.MustCompile(`\b(\d{1,3}(\.\d{1,3}){3}/\d{1,2})\b`)
-var ipRegex *regexp.Regexp = regexp.MustCompile(`\b(\d{1,3}(\.\d{1,3}){3})\b`)
+var cidrRegex = regexp.MustCompile(`\b(\d{1,3}(\.\d{1,3}){3}/\d{1,2})\b`)
+var ipRegex = regexp.MustCompile(`\b(\d{1,3}(\.\d{1,3}){3})\b`)
 
 func line2IPRange(line string) string {
 	if cidrMatch := cidrRegex.FindString(line); cidrMatch != "" {
@@ -170,10 +180,6 @@ func line2IPRange(line string) string {
 		return ipMatch + "/32"
 	}
 	return ""
-}
-
-func Empty() *IPSearch {
-	return NewIPTree(false)
 }
 
 func NewFromFile(path string, threadSafe bool) (*IPSearch, error) {
