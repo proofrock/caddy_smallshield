@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -28,15 +27,11 @@ func init() {
 type CaddySmallShield struct {
 	BlacklistURL string `json:"blacklist_url,omitempty"`
 	Whitelist    string `json:"whitelist,omitempty"`
-	ClosingHours string `json:"closing_hours,omitempty"`
 	LogBlockings string `json:"log_blockings,omitempty"`
 
-	blacklistCidrs        *ipsearch.IPSearch
-	whitelist             []string
-	closingHours          [24]bool
-	closingHoursPrintable string
-	closingHoursCount     int
-	logBlockings          bool
+	blacklistCidrs *ipsearch.IPSearch
+	whitelist      []string
+	logBlockings   bool
 
 	logger *zap.Logger
 
@@ -77,18 +72,6 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 		m.whitelist = strings.Split(m.Whitelist, ",")
 	}
 
-	if m.ClosingHours != "" {
-		for _, ch := range strings.Split(m.ClosingHours, ",") {
-			hour, err := strconv.Atoi(strings.TrimSpace(ch))
-			if err != nil || hour < 0 || hour > 23 {
-				return fmt.Errorf("'%s' is not a valid closing hour", ch)
-			}
-			m.closingHours[hour] = true
-			m.closingHoursCount++
-		}
-		m.closingHoursPrintable = getPrintableSlice(m.closingHours)
-	}
-
 	if m.LogBlockings != "" {
 		lb, err := strconv.ParseBool(m.LogBlockings)
 		if err != nil {
@@ -101,7 +84,7 @@ func (m *CaddySmallShield) Provision(ctx caddy.Context) error {
 	if m.logBlockings {
 		loggingString = " Logging active."
 	}
-	m.logger.Sugar().Infof("SmallShield %s: init'd with %d items in blacklist and %d in whitelist, %d closing hours.%s", VERSION, m.blacklistCidrs.IPRangesIngested(), len(m.whitelist), m.closingHoursCount, loggingString)
+	m.logger.Sugar().Infof("SmallShield %s: init'd with %d items in blacklist and %d in whitelist.%s", VERSION, m.blacklistCidrs.IPRangesIngested(), len(m.whitelist), loggingString)
 
 	// return fmt.Errorf("myerror")
 	return nil
@@ -130,16 +113,12 @@ func (m *CaddySmallShield) IsWhitelisted(ip string) bool {
 func (m CaddySmallShield) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	blockedReason := ""
 
-	var hour = time.Now().Hour()
-	if m.closingHours[hour] {
-		blockedReason = fmt.Sprintf("shop is closed, hour is %d and closing_hours is set to %s", hour, m.closingHoursPrintable)
-	} else {
-		var ip = cutToColon(r.RemoteAddr)
-		m.logger.Sugar().Infof("IP: %s", r.RemoteAddr)
-		if m.IsBlacklisted(ip) && !m.IsWhitelisted(ip) {
-			blockedReason = fmt.Sprintf("IP %s is blocked", ip)
-		}
+	var ip = cutToColon(r.RemoteAddr)
+	m.logger.Sugar().Infof("IP: %s", r.RemoteAddr)
+	if m.IsBlacklisted(ip) && !m.IsWhitelisted(ip) {
+		blockedReason = fmt.Sprintf("IP %s is blocked", ip)
 	}
+
 	if blockedReason != "" {
 		if m.logBlockings {
 			m.logger.Sugar().Infof("blocked: %s", blockedReason)
@@ -160,10 +139,6 @@ func (m *CaddySmallShield) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 			case "blacklist_url":
 				if !d.Args(&m.BlacklistURL) {
 					return d.Err("invalid blacklist_url configuration")
-				}
-			case "closing_hours":
-				if !d.Args(&m.ClosingHours) {
-					return d.Err("invalid closing_hours configuration")
 				}
 			case "log_blockings":
 				if !d.Args(&m.LogBlockings) {
